@@ -17,8 +17,8 @@
 @property (weak, nonatomic) IBOutlet UIButton *signInButton;
 @property (weak, nonatomic) IBOutlet UILabel *signInFailureText;
 
-@property (nonatomic) BOOL passwordIsValid;
-@property (nonatomic) BOOL usernameIsValid;
+//@property (nonatomic) BOOL passwordIsValid;
+//@property (nonatomic) BOOL usernameIsValid;
 @property (strong, nonatomic) RWDummySignInService *signInService;
 
 @end
@@ -28,13 +28,13 @@
 - (void)viewDidLoad {
   [super viewDidLoad];
   
-  [self updateUIState];
+//  [self updateUIState];
   
   self.signInService = [RWDummySignInService new];
   
   // handle text changes for both text fields
-  [self.usernameTextField addTarget:self action:@selector(usernameTextFieldChanged) forControlEvents:UIControlEventEditingChanged];
-  [self.passwordTextField addTarget:self action:@selector(passwordTextFieldChanged) forControlEvents:UIControlEventEditingChanged];
+//  [self.usernameTextField addTarget:self action:@selector(usernameTextFieldChanged) forControlEvents:UIControlEventEditingChanged];
+//  [self.passwordTextField addTarget:self action:@selector(passwordTextFieldChanged) forControlEvents:UIControlEventEditingChanged];
   
   // initially hide the failure message
   self.signInFailureText.hidden = YES;
@@ -61,6 +61,54 @@
 //        
 //        NSLog(@"%@",x);
 //    }];
+    
+    RACSignal *validUsnernameSignal = [self.usernameTextField.rac_textSignal map:^id(NSString *text) {
+        
+        return @([self isValidUsername:text]);
+    }];
+    
+    RACSignal *validPasswordSignal = [self.passwordTextField.rac_textSignal map:^id(NSString *text) {
+        
+        return @([self isValidPassword:text]);
+    }];
+//
+//    RAC(self.usernameTextField,backgroundColor) = [validUsnernameSignal map:^id(NSNumber *usernameValid) {
+//        
+//        return [usernameValid boolValue] ? [UIColor clearColor] : [UIColor yellowColor];
+//    }];
+//    
+//    RAC(self.passwordTextField,backgroundColor) = [validPasswordSignal map:^id(NSNumber *validPassword) {
+//        
+//        return [validPassword boolValue] ? [UIColor clearColor] : [UIColor yellowColor];
+//    }];
+    
+    RACSignal *signUpActiveSignal = [RACSignal combineLatest:@[validUsnernameSignal,validPasswordSignal] reduce:^id(NSNumber *usernameValid, NSNumber *passwordValid){
+        
+        return @([usernameValid boolValue]&&[passwordValid boolValue]);
+    }];
+    
+    [signUpActiveSignal subscribeNext:^(NSNumber *signUpActive) {
+        
+        self.signInButton.enabled = [signUpActive boolValue];
+    }];
+    
+    [[[[self.signInButton rac_signalForControlEvents:UIControlEventTouchUpInside] doNext:^(id x) {
+        
+        self.signInButton.enabled = NO;
+        self.signInFailureText.hidden = YES;
+    }]flattenMap:^id(id value) {
+        
+        return [self signInSignal];
+    }] subscribeNext:^(NSNumber *signId) {
+        
+        self.signInButton.enabled = YES;
+        BOOL success = [signId boolValue];
+        self.signInFailureText.hidden = success;
+        if (success) {
+            
+            [self performSegueWithIdentifier:@"signInSuccess" sender:self];
+        };
+    }];
 }
 
 - (BOOL)isValidUsername:(NSString *)username {
@@ -88,23 +136,36 @@
                             }];
 }
 
+- (RACSignal *)signInSignal{
+    
+    return [RACSignal createSignal:^RACDisposable *(id<RACSubscriber> subscriber) {
+        
+        [self.signInService signInWithUsername:self.usernameTextField.text password:self.passwordTextField.text complete:^(BOOL success) {
+            
+            [subscriber sendNext:@(success)];
+            [subscriber sendCompleted];
+        }];
+        return nil;
+    }];
+}
+
 
 // updates the enabled state and style of the text fields based on whether the current username
 // and password combo is valid
-- (void)updateUIState {
-  self.usernameTextField.backgroundColor = self.usernameIsValid ? [UIColor clearColor] : [UIColor yellowColor];
-  self.passwordTextField.backgroundColor = self.passwordIsValid ? [UIColor clearColor] : [UIColor yellowColor];
-  self.signInButton.enabled = self.usernameIsValid && self.passwordIsValid;
-}
+//- (void)updateUIState {
+////  self.usernameTextField.backgroundColor = self.usernameIsValid ? [UIColor clearColor] : [UIColor yellowColor];
+////  self.passwordTextField.backgroundColor = self.passwordIsValid ? [UIColor clearColor] : [UIColor yellowColor];
+//  self.signInButton.enabled = self.usernameIsValid && self.passwordIsValid;
+//}
 
-- (void)usernameTextFieldChanged {
-  self.usernameIsValid = [self isValidUsername:self.usernameTextField.text];
-  [self updateUIState];
-}
-
-- (void)passwordTextFieldChanged {
-  self.passwordIsValid = [self isValidPassword:self.passwordTextField.text];
-  [self updateUIState];
-}
+//- (void)usernameTextFieldChanged {
+//  self.usernameIsValid = [self isValidUsername:self.usernameTextField.text];
+//  [self updateUIState];
+//}
+//
+//- (void)passwordTextFieldChanged {
+//  self.passwordIsValid = [self isValidPassword:self.passwordTextField.text];
+//  [self updateUIState];
+//}
 
 @end
